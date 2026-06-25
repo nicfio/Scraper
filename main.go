@@ -11,6 +11,9 @@ import (
 
 var stderr = os.Stderr
 
+// gQuietAll, impostato da -qa, sopprime ogni output, errori inclusi.
+var gQuietAll bool
+
 // Config raccoglie tutte le opzioni a riga di comando.
 type Config struct {
 	// download / multi-segmento
@@ -52,7 +55,8 @@ type Config struct {
 	UserAgent string
 	Referer   string
 	Insecure  bool
-	Quiet     bool
+	QuietErr  bool // -qe: nessun output tranne gli errori
+	QuietAll  bool // -qa: nessun output, errori inclusi
 	Verbose   bool
 	InputFile string
 }
@@ -66,7 +70,7 @@ func (s *stringList) Set(v string) error {
 }
 
 func logf(cfg *Config, format string, args ...any) {
-	if cfg == nil || !cfg.Verbose {
+	if gQuietAll || cfg == nil || !cfg.Verbose {
 		return
 	}
 	s := fmt.Sprintf(format, args...)
@@ -77,6 +81,9 @@ func logf(cfg *Config, format string, args ...any) {
 	}
 }
 func errf(format string, args ...any) {
+	if gQuietAll {
+		return
+	}
 	s := "scrap: " + fmt.Sprintf(format, args...)
 	if gProg != nil {
 		gProg.Log(s)
@@ -161,12 +168,14 @@ func main() {
 	strVar(fs, &cfg.UserAgent, "U", "user-agent", "scrap/1.0", "User-Agent")
 	fs.StringVar(&cfg.Referer, "referer", "", "Referer")
 	fs.BoolVar(&cfg.Insecure, "insecure", false, "non verifica i certificati TLS")
-	boolVar(fs, &cfg.Quiet, "q", "quiet", false, "silenzioso")
+	fs.BoolVar(&cfg.QuietErr, "qe", false, "silenzioso: nessun output tranne gli errori")
+	fs.BoolVar(&cfg.QuietAll, "qa", false, "silenzioso totale: nessun output, errori inclusi")
 	boolVar(fs, &cfg.Verbose, "v", "verbose", false, "log dettagliato")
 	strVar(fs, &cfg.InputFile, "i", "input-file", "", "legge gli URL da file")
 
 	fs.Parse(os.Args[1:])
 	cfg.Headers = headers
+	gQuietAll = cfg.QuietAll
 
 	// conversioni
 	var err error
@@ -244,7 +253,7 @@ func main() {
 		}
 	}
 
-	prog := NewProgress(cfg.Quiet)
+	prog := NewProgress(cfg.QuietErr || cfg.QuietAll)
 	gProg = prog
 	go prog.run()
 
